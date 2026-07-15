@@ -1,0 +1,21 @@
+account:
+  name: "personal_account"
+  host: "imap.domain.com"
+  port: 993
+  folder: "INBOX"
+llm:
+  provider: "gemini" # O "ollama"
+  model: "gemini-2.5-flash"
+  max_retries: 5
+  user_context: ""
+  # ollama_base_url: "http://localhost:11434"
+  # ollama_format: "auto" # auto | schema | json | plain
+classifier_rules:
+  score_thresholds:
+    important: 60
+    discard: -30
+  whitelist_domains: []
+  blacklist_domains: []
+  force_llm_senders: []
+  positive_keywords: ["factura", "pedido"]
+  negative_keywords: ["oferta", "promoción"]

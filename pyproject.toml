@@ -1,0 +1,29 @@
+[project]
+name = "mail-assistant"
+version = "0.1.0"
+description = "A modular, local-first email assistant"
+dependencies = [
+    "keyring",
+    "imap-tools",
+    "google-genai",
+    "pydantic",
+    "pyyaml",
+]
+requires-python = ">=3.10"
+authors = [
+    {name = "User", email = "user@example.com"}
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project.scripts]
+mail-assistant = "mail_assistant.__main__:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
