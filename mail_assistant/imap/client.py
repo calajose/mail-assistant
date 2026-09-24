@@ -1,9 +1,18 @@
 from imap_tools import MailBox, A, MailMessageFlags
+from imap_tools.errors import MailboxFolderSelectError
 from contextlib import contextmanager
 from collections.abc import Callable
 from ..config.models import AccountConfig
+from ..utils.folders import resolve_folder
 
 FETCH_CHUNK_SIZE = 25
+
+
+class FolderNotFoundError(Exception):
+    def __init__(self, folder: str, available: list[str]):
+        self.folder = folder
+        self.available = available
+        super().__init__(f"Folder '{folder}' does not exist on the server")
 
 
 class MailClient:
@@ -18,7 +27,7 @@ class MailClient:
         with MailBox(self.config.host, port=self.config.port).login(
             self.config.name, self.password
         ) as mailbox:
-            mailbox.folder.set(self.config.folder, readonly=True)
+            self._select_folder(mailbox, readonly=True)
             self._mailbox_session = mailbox
             try:
                 yield mailbox
@@ -34,8 +43,24 @@ class MailClient:
         with MailBox(self.config.host, port=self.config.port).login(
             self.config.name, self.password
         ) as mailbox:
-            mailbox.folder.set(self.config.folder, readonly=True)
+            self._select_folder(mailbox, readonly=True)
             yield mailbox
+
+    def list_folders(self) -> list[str]:
+        with MailBox(self.config.host, port=self.config.port).login(
+            self.config.name, self.password
+        ) as mailbox:
+            return [folder.name for folder in mailbox.folder.list()]
+
+    def _select_folder(self, mailbox, readonly: bool) -> None:
+        available = [folder.name for folder in mailbox.folder.list()]
+        resolved = resolve_folder(self.config.folder, available)
+        if resolved is None:
+            raise FolderNotFoundError(self.config.folder, available)
+        try:
+            mailbox.folder.set(resolved, readonly=readonly)
+        except MailboxFolderSelectError as exc:
+            raise FolderNotFoundError(self.config.folder, available) from exc
 
     def get_unread_emails(
         self,
@@ -87,7 +112,7 @@ class MailClient:
         with MailBox(self.config.host, port=self.config.port).login(
             self.config.name, self.password
         ) as mailbox:
-            mailbox.folder.set(self.config.folder, readonly=True)
+            self._select_folder(mailbox, readonly=True)
             for msg in mailbox.fetch(A(uid=uid)):
                 return msg.text[:limit]
         return ""
@@ -100,7 +125,7 @@ class MailClient:
         with MailBox(self.config.host, port=self.config.port).login(
             self.config.name, self.password
         ) as mailbox:
-            mailbox.folder.set(self.config.folder, readonly=False)
+            self._select_folder(mailbox, readonly=False)
             mailbox.flag(cleaned_uids, MailMessageFlags.SEEN, True)
 
         return len(cleaned_uids)

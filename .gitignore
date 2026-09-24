@@ -27,6 +27,6 @@ build/
 .DS_Store
 Thumbs.db
 
-# Archivos de pruebas temporales
-test_*.py
+# Archivos de pruebas temporales (en la raiz; los tests del proyecto viven en tests/)
+/test_*.py
 tmp/

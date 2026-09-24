@@ -8,6 +8,7 @@ Asistente de correo local y modular que clasifica correos electrónicos usando r
 - Gestión segura de credenciales mediante el llavero del sistema (keyring)
 - Arquitectura extensible de proveedores LLM
 - Generación de reportes detallados en Markdown
+- Listado de carpetas del servidor y resolución de nombres de carpeta con sugerencias si no existen
 
 ## Instalación
 
@@ -71,6 +72,7 @@ Una vez instalado, puedes ejecutar los siguientes comandos:
 
 ```bash
 mail-assistant configure
+mail-assistant folders
 mail-assistant scan
 mail-assistant clean
 mail-assistant report
@@ -80,6 +82,7 @@ Si prefieres no activar el entorno virtual manualmente en cada sesion, usa el sc
 
 ```bash
 ./run configure
+./run folders
 ./run scan
 ./run clean
 ./run report
@@ -205,6 +208,25 @@ Con eso, cualquier correo cuyo remitente contenga `cantookstation.com` se marca 
 
 Nota: las keywords locales no analizan el cuerpo del correo; solo asunto y remitente. Por eso, en este caso, whitelist por dominio es la opción más fiable.
 
+### Comando folders
+
+Lista las carpetas IMAP reales disponibles en el servidor, marcando cuál es la configurada en `config.yaml`. Útil para averiguar el nombre exacto a usar con `--folder`, ya que cada proveedor usa su propia nomenclatura (por ejemplo, Yahoo no tiene `Spam`: su carpeta de correo basura se llama `Bulk`).
+
+```bash
+mail-assistant folders
+```
+
+No acepta flags. Ejemplo de salida:
+
+```
+Carpetas disponibles en imap.mail.yahoo.com:
+  - Archive
+  - Bulk
+  - Inbox (configurada)
+  - Sent
+  - Trash
+```
+
 ### Comando scan
 
 Escanea los correos no leídos de la carpeta configurada y los clasifica usando reglas locales y, opcionalmente, un LLM.
@@ -217,7 +239,7 @@ mail-assistant scan [--limit N] [--no-llm] [--folder CARPETA] [--all] [--force-l
 |------|-------------|
 | `--limit N` | Número máximo de correos a procesar (default: 20). Usa un valor alto como `99999` para procesar todos los no leídos |
 | `--no-llm` | Deshabilita el uso del LLM; clasifica únicamente con reglas locales (whitelist, blacklist, keywords) |
-| `--folder CARPETA` | Carpeta IMAP a escanear para esta ejecución. Si no se indica, usa la carpeta guardada en la configuración |
+| `--folder CARPETA` | Carpeta IMAP a escanear para esta ejecución. Si no se indica, usa la carpeta guardada en la configuración. El nombre se resuelve sin distinguir mayúsculas (`inbox` = `Inbox`); usa `mail-assistant folders` para ver las carpetas reales |
 | `--all` | Procesa todos los correos no leídos sin preguntar, ignorando el límite |
 | `--force-llm` | Fuerza que todos los correos pasen por el LLM, ignorando la clasificación local y anulando el cortocircuito de whitelist/blacklist |
 
@@ -285,7 +307,7 @@ mail-assistant clean [--folder CARPETA] [--yes] [--all]
 
 | Flag | Descripción |
 |------|-------------|
-| `--folder CARPETA` | Carpeta IMAP a limpiar para esta ejecución. Si no se indica, usa la carpeta guardada en la configuración |
+| `--folder CARPETA` | Carpeta IMAP a limpiar para esta ejecución. Si no se indica, usa la carpeta guardada en la configuración. Igual que en `scan`, el nombre se resuelve sin distinguir mayúsculas |
 | `--yes` | Marca solo DESCARTABLES sin preguntar nada |
 | `--yes --all` | Marca todos los correos sin preguntar nada |
 
@@ -297,6 +319,19 @@ Comportamiento según flags:
 - `--yes --all` = `--yes --all`: marca todos, sin preguntar nada.
 
 Nota de comportamiento (caso borde): si ejecutaste `scan` con `--folder` para usar una carpeta distinta de la configurada, ejecuta `clean` con ese mismo `--folder` para marcar los correos correctos.
+
+### Troubleshooting: carpeta inexistente
+
+Si indicas una carpeta que no existe, el comando no lanza un traceback: termina con código 1 y muestra las carpetas reales del servidor junto con una sugerencia.
+
+- **Síntoma**: `Error: la carpeta 'Spam' no existe en el servidor.`
+- **Causa**: cada proveedor usa su propia nomenclatura y puede no existir esa carpeta.
+- **Acción**: ejecuta `mail-assistant folders` para ver los nombres exactos y repite el comando con uno de ellos.
+
+```bash
+mail-assistant folders
+mail-assistant scan --folder Bulk
+```
 
 ### Generación de reportes
 

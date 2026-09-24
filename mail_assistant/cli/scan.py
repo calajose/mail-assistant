@@ -3,12 +3,13 @@ import sys
 import time
 from pathlib import Path
 from ..config.manager import ConfigManager
-from ..imap.client import MailClient
+from ..imap.client import MailClient, FolderNotFoundError
 from ..rules.engine import RuleEngine
 from ..llm.gemini import GeminiProvider
 from ..llm.ollama import OllamaProvider
 from ..classifier.service import ClassifierService
 from ..utils.progress import ConsoleScanReporter
+from ..utils.folders import folder_error_message
 
 
 def _resolve_scan_limit(total_unread: int, limit: int) -> int:
@@ -42,7 +43,11 @@ def run_scan(limit: int, no_llm: bool, folder: str | None, process_all: bool = F
         manager.get_imap_password(manager.config.account.name),
         body_preview_limit=manager.config.llm.body_preview_limit,
     )
-    total_unread = mail_client.count_unread()
+    try:
+        total_unread = mail_client.count_unread()
+    except FolderNotFoundError as exc:
+        print(folder_error_message(exc.folder, exc.available))
+        sys.exit(1)
     print(f"Correos no leidos en '{selected_folder}': {total_unread}")
     if not no_llm:
         print(f"Proveedor LLM: {manager.config.llm.provider} | Modelo: {manager.config.llm.model}")

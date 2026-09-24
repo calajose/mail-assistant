@@ -19,9 +19,10 @@ mail_assistant/
 ## Flujo de trabajo
 
 1. `configure` -> Configurar cuenta, credenciales y LLM
-2. `scan` -> Escanear y clasificar correos
-3. `report` -> Generar reporte desde results.json
-4. `clean` -> Marcar correos como leidos
+2. `folders` -> Listar carpetas IMAP disponibles (opcional)
+3. `scan` -> Escanear y clasificar correos
+4. `report` -> Generar reporte desde results.json
+5. `clean` -> Marcar correos como leidos
 
 ## Convenciones
 
@@ -36,9 +37,18 @@ mail_assistant/
 ```bash
 ./run configure        # Configuracion inicial
 ./run configure --model-only  # Cambiar solo LLM
+./run folders          # Listar carpetas IMAP del servidor
 ./run scan --limit 20  # Escanear con limite
 ./run scan --no-llm    # Solo reglas locales
+./run scan --folder X  # Escanear una carpeta concreta (nombre insensible a mayusculas)
 ./run scan --force-llm # Forzar LLM en todos
 ./run report           # Generar reporte
 ./run clean            # Limpiar correos procesados
 ```
+
+## Manejo de carpetas
+
+- Las carpetas se resuelven contra el listado real del servidor; `--folder inbox` equivale a `Inbox`.
+- Si la carpeta no existe, `scan` y `clean` terminan con codigo 1 y muestran las carpetas
+  disponibles mas una sugerencia, en lugar de un traceback.
+- `mail_assistant/utils/folders.py` contiene la logica pura de resolucion y sugerencia.

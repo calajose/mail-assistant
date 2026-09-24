@@ -32,6 +32,12 @@ def get_parser():
     # Report
     subparsers.add_parser("report")
 
+    # Folders
+    subparsers.add_parser(
+        "folders",
+        help="Listar las carpetas IMAP disponibles en el servidor",
+    )
+
     # Clean
     clean_parser = subparsers.add_parser("clean")
     clean_parser.add_argument(

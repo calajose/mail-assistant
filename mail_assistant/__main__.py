@@ -3,6 +3,7 @@ from .cli.configure import run_configure
 from .cli.scan import run_scan
 from .cli.report import run_report
 from .cli.clean import run_clean
+from .cli.folders import run_folders
 
 def main():
     parser = get_parser()
@@ -16,6 +17,8 @@ def main():
         run_report()
     elif args.command == "clean":
         run_clean(args.folder, args.yes, args.process_all)
+    elif args.command == "folders":
+        run_folders()
     else:
         parser.print_help()
 
