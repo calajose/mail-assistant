@@ -16,23 +16,40 @@ class FolderNotFoundError(Exception):
 
 
 class MailClient:
-    def __init__(self, config: AccountConfig, password: str, body_preview_limit: int = 500):
+    def __init__(self, config: AccountConfig, password: str, body_preview_limit: int = 4096):
         self.config = config
         self.password = password
         self.body_preview_limit = body_preview_limit
         self._mailbox_session = None
+        self._retired_sessions: list = []
+
+    @staticmethod
+    def _safe_close(mailbox) -> None:
+        try:
+            mailbox.__exit__(None, None, None)
+        except Exception:
+            pass
 
     @contextmanager
     def session(self):
-        with MailBox(self.config.host, port=self.config.port).login(
+        with MailBox(self.config.host, port=self.config.port, timeout=self.config.timeout).login(
             self.config.name, self.password
-        ) as mailbox:
-            self._select_folder(mailbox, readonly=True)
-            self._mailbox_session = mailbox
+        ) as original:
+            self._select_folder(original, readonly=True)
+            self._mailbox_session = original
+            retired = []
+            self._retired_sessions = retired
             try:
-                yield mailbox
+                yield original
             finally:
+                current = self._mailbox_session
                 self._mailbox_session = None
+                self._retired_sessions = []
+                for stale in retired:
+                    if stale is not original:
+                        self._safe_close(stale)
+                if current is not None and current is not original:
+                    self._safe_close(current)
 
     @contextmanager
     def _open_readonly_mailbox(self):
@@ -40,14 +57,14 @@ class MailClient:
             yield self._mailbox_session
             return
 
-        with MailBox(self.config.host, port=self.config.port).login(
+        with MailBox(self.config.host, port=self.config.port, timeout=self.config.timeout).login(
             self.config.name, self.password
         ) as mailbox:
             self._select_folder(mailbox, readonly=True)
             yield mailbox
 
     def list_folders(self) -> list[str]:
-        with MailBox(self.config.host, port=self.config.port).login(
+        with MailBox(self.config.host, port=self.config.port, timeout=self.config.timeout).login(
             self.config.name, self.password
         ) as mailbox:
             return [folder.name for folder in mailbox.folder.list()]
@@ -109,20 +126,41 @@ class MailClient:
         return ""
 
     def _get_email_body_preview_with_fresh_connection(self, uid: str, limit: int) -> str:
-        with MailBox(self.config.host, port=self.config.port).login(
-            self.config.name, self.password
-        ) as mailbox:
-            self._select_folder(mailbox, readonly=True)
-            for msg in mailbox.fetch(A(uid=uid)):
-                return msg.text[:limit]
-        return ""
+        replacement = MailBox(
+            self.config.host, port=self.config.port, timeout=self.config.timeout
+        )
+        try:
+            replacement.login(self.config.name, self.password)
+        except Exception:
+            self._safe_close(replacement)
+            raise
+
+        try:
+            self._select_folder(replacement, readonly=True)
+            preview = ""
+            for msg in replacement.fetch(A(uid=uid)):
+                preview = msg.text[:limit]
+                break
+        except Exception:
+            self._safe_close(replacement)
+            raise
+
+        self._adopt_session(replacement)
+        return preview
+
+    def _adopt_session(self, replacement) -> None:
+        """Retiene la sesion restablecida para los correos siguientes (A-11)."""
+        stale = self._mailbox_session
+        if stale is not None:
+            self._retired_sessions.append(stale)
+        self._mailbox_session = replacement
 
     def mark_as_read(self, uids: list[str]) -> int:
         cleaned_uids = [uid for uid in uids if uid]
         if not cleaned_uids:
             return 0
 
-        with MailBox(self.config.host, port=self.config.port).login(
+        with MailBox(self.config.host, port=self.config.port, timeout=self.config.timeout).login(
             self.config.name, self.password
         ) as mailbox:
             self._select_folder(mailbox, readonly=False)

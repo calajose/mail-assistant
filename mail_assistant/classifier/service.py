@@ -23,7 +23,13 @@ class ClassifierService:
         self.llm_provider = llm_provider
         self.reporter = reporter or ScanReporter()
 
-    def process_unread(self, limit: int, use_llm: bool, force_llm: bool = False):
+    def process_unread(
+        self,
+        limit: int,
+        use_llm: bool,
+        force_llm: bool = False,
+        on_result=None,
+    ):
         results = []
         self.reporter.fetch_start()
 
@@ -82,5 +88,8 @@ class ClassifierService:
                     explanation = EXPLICACION_REGLAS_LOCALES
                     self.reporter.classified_by_rules(category, score)
 
-                results.append({"header": header, "category": category, "explanation": explanation})
+                record = {"header": header, "category": category, "explanation": explanation}
+                results.append(record)
+                if on_result:
+                    on_result(record)
         return results

@@ -1,8 +1,11 @@
 import json
+import os
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from ..config.manager import ConfigManager
+from ..config.models import EmailResult
 from ..imap.client import MailClient, FolderNotFoundError
 from ..rules.engine import RuleEngine
 from ..llm.gemini import GeminiProvider
@@ -10,6 +13,22 @@ from ..llm.ollama import OllamaProvider
 from ..classifier.service import ClassifierService
 from ..utils.progress import ConsoleScanReporter
 from ..utils.folders import folder_error_message
+from ..utils.cli import is_confirm_all
+
+
+def _serialize_result(record: dict) -> dict:
+    """Registro saneado de results.json: solo datos de negocio (A-16, P8)."""
+    return EmailResult.from_classification(
+        record["header"], record["category"], record["explanation"]
+    ).model_dump()
+
+
+def _write_results(output: dict, path: str = "results.json") -> None:
+    """Escritura atomica para no perder los correos ya clasificados (A-03)."""
+    tmp_path = f".{path}.tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(output, f, ensure_ascii=False, indent=2)
+    os.replace(tmp_path, path)
 
 
 def _resolve_scan_limit(total_unread: int, limit: int) -> int:
@@ -22,7 +41,7 @@ def _resolve_scan_limit(total_unread: int, limit: int) -> int:
         print("\nEntrada cancelada. Se procesara solo hasta el limite.")
         return limit
 
-    if choice in {"t", "todos", "all", "a"}:
+    if is_confirm_all(choice):
         return total_unread
     return limit
 
@@ -81,6 +100,8 @@ def run_scan(limit: int, no_llm: bool, folder: str | None, process_all: bool = F
                 user_context=user_context,
                 format_mode=manager.config.llm.ollama_format,
                 body_preview_limit=manager.config.llm.body_preview_limit,
+                max_retries=manager.config.llm.max_retries,
+                on_retry=reporter.llm_retry,
             )
         elif manager.config.llm.provider == "gemini":
             api_key = manager.get_gemini_api_key()
@@ -94,29 +115,35 @@ def run_scan(limit: int, no_llm: bool, folder: str | None, process_all: bool = F
                 max_retries=manager.config.llm.max_retries,
                 user_context=user_context,
                 on_retry=reporter.llm_retry,
+                body_preview_limit=manager.config.llm.body_preview_limit,
             )
         else:
             print(f"Error: Proveedor LLM desconocido: {manager.config.llm.provider}")
             sys.exit(1)
 
     service = ClassifierService(mail_client, rule_engine, llm, reporter=reporter)
-    results = service.process_unread(effective_limit, not no_llm, force_llm=force_llm)
-    
-    serialized_results = []
-    for r in results:
-        serialized_results.append({
-            "header": r["header"].model_dump(mode='json'),
-            "category": r["category"].value,
-            "explanation": r["explanation"]
-        })
 
+    serialized_results = []
     output = {
         "provider": manager.config.llm.provider if not no_llm else "none",
         "model": manager.config.llm.model if not no_llm else None,
+        "updated_at": None,
         "results": serialized_results,
     }
-    with open("results.json", "w") as f:
-        json.dump(output, f)
+
+    def _persist(record: dict) -> None:
+        serialized_results.append(_serialize_result(record))
+        output["results"] = serialized_results
+        output["updated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        _write_results(output)
+
+    results = service.process_unread(
+        effective_limit, not no_llm, force_llm=force_llm, on_result=_persist
+    )
+
+    output["results"] = serialized_results
+    output["updated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    _write_results(output)
 
     elapsed = time.perf_counter() - started
     reporter.print_summary(len(results), elapsed)

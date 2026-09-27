@@ -24,6 +24,8 @@ class RuleEngine:
             if score >= 100:
                 return Category.IMPORTANTE, score, False
             if score <= -100:
+                if forced:
+                    return Category.DUDOSO, score, True
                 return Category.DESCARTABLE, score, False
                 
         if score >= self.config.score_thresholds.important:

@@ -52,19 +52,37 @@ class ConfigManager:
     def set_gemini_api_key(self, api_key: str):
         keyring.set_password("mail-assistant", "gemini_api_key", api_key)
 
+    def _fallback_prompt(self, provider: str) -> str:
+        prompts_dir = self.config_path.parent / "prompts"
+        default_prompt_file = prompts_dir / f"{provider}.default.txt"
+        if default_prompt_file.exists() and default_prompt_file.is_file():
+            content = default_prompt_file.read_text(encoding="utf-8")
+            clean_lines = [
+                line for line in content.splitlines() if not line.strip().startswith("#")
+            ]
+            cleaned = "\n".join(clean_lines).strip()
+            if cleaned:
+                return cleaned
+        from .defaults import DEFAULT_GEMINI_PROMPT, DEFAULT_OLLAMA_PROMPT
+        return DEFAULT_GEMINI_PROMPT if provider == "gemini" else DEFAULT_OLLAMA_PROMPT
+
     def get_prompt(self, provider: str) -> str:
         prompts_dir = self.config_path.parent / "prompts"
         user_prompt_file = prompts_dir / f"{provider}.txt"
 
+        content = None
         if user_prompt_file.exists() and user_prompt_file.is_file():
             content = user_prompt_file.read_text(encoding="utf-8")
-        else:
-            default_prompt_file = prompts_dir / f"{provider}.default.txt"
-            if default_prompt_file.exists() and default_prompt_file.is_file():
-                content = default_prompt_file.read_text(encoding="utf-8")
-            else:
-                from .defaults import DEFAULT_GEMINI_PROMPT, DEFAULT_OLLAMA_PROMPT
-                return DEFAULT_GEMINI_PROMPT if provider == "gemini" else DEFAULT_OLLAMA_PROMPT
 
-        clean_lines = [line for line in content.splitlines() if not line.strip().startswith("#")]
-        return "\n".join(clean_lines).strip()
+        if content is not None:
+            clean_lines = [line for line in content.splitlines() if not line.strip().startswith("#")]
+            cleaned = "\n".join(clean_lines).strip()
+            if cleaned:
+                return cleaned
+            print(
+                f"El prompt personalizado de {provider} no contiene instrucciones; "
+                "se usa el prompt maestro por defecto."
+            )
+            return self._fallback_prompt(provider)
+
+        return self._fallback_prompt(provider)

@@ -27,8 +27,7 @@ class ReportGenerator:
             report += "| De | Asunto | Fecha | Explicación |\n"
             report += "| --- | --- | --- | --- |\n"
             for r in important:
-                header = r["header"]
-                report += f"| {escape_md(header['from_'])} | {escape_md(header['subject'])} | {escape_md(header['date'])} | {escape_md(r['explanation'])} |\n"
+                report += f"| {escape_md(r['from_'])} | {escape_md(r['subject'])} | {escape_md(r['date'])} | {escape_md(r['explanation'])} |\n"
             report += "\n"
 
         if include_dudoso and dudoso:
@@ -36,7 +35,6 @@ class ReportGenerator:
             report += "| De | Asunto | Fecha | Origen de la Duda | Detalle / Explicación |\n"
             report += "| --- | --- | --- | --- | --- |\n"
             for r in dudoso:
-                header = r["header"]
                 if r["explanation"] == EXPLICACION_REGLAS_LOCALES:
                     origen = "Reglas Locales (sin LLM)"
                     detalle = "La puntuación obtenida por las reglas locales determinó que el correo es DUDOSO y el LLM no fue ejecutado (o está desactivado)."
@@ -46,7 +44,7 @@ class ReportGenerator:
                 else:
                     origen = "Confirmado por LLM"
                     detalle = r["explanation"]
-                report += f"| {escape_md(header['from_'])} | {escape_md(header['subject'])} | {escape_md(header['date'])} | {escape_md(origen)} | {escape_md(detalle)} |\n"
+                report += f"| {escape_md(r['from_'])} | {escape_md(r['subject'])} | {escape_md(r['date'])} | {escape_md(origen)} | {escape_md(detalle)} |\n"
             report += "\n"
 
         if include_descartable and descartable:
@@ -54,8 +52,7 @@ class ReportGenerator:
             report += "| De | Asunto | Fecha | Explicación |\n"
             report += "| --- | --- | --- | --- |\n"
             for r in descartable:
-                header = r["header"]
-                report += f"| {escape_md(header['from_'])} | {escape_md(header['subject'])} | {escape_md(header['date'])} | {escape_md(r['explanation'])} |\n"
+                report += f"| {escape_md(r['from_'])} | {escape_md(r['subject'])} | {escape_md(r['date'])} | {escape_md(r['explanation'])} |\n"
             report += "\n"
         
         return report
