@@ -18,6 +18,7 @@ class GeminiProvider(LLMProvider):
         max_retries: int = 5,
         user_context: str | None = None,
         on_retry: Callable[[int, int, str, float], None] | None = None,
+        body_preview_limit: int = 4096,
     ):
         self.client = Client(api_key=api_key)
         self.model = model
@@ -25,6 +26,7 @@ class GeminiProvider(LLMProvider):
         self.max_retries = max(1, max_retries)
         self.user_context = user_context.strip() if user_context else None
         self.on_retry = on_retry
+        self.body_preview_limit = body_preview_limit
 
     def _sleep_before_retry(self, attempt: int, reason: str):
         base_delay = min(2 ** attempt, 30)
@@ -42,7 +44,7 @@ class GeminiProvider(LLMProvider):
             f"Senales de reglas locales: {signals}\n"
         )
         if body_preview:
-            prompt += f"Vista previa del cuerpo: {body_preview}\n"
+            prompt += f"Vista previa del cuerpo: {body_preview[: self.body_preview_limit]}\n"
         if self.user_context:
             prompt += f"\nContexto del usuario:\n{self.user_context}\n"
 

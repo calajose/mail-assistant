@@ -1,10 +1,11 @@
-import json
 import sys
 from pathlib import Path
 from ..config.manager import ConfigManager
 from ..config.models import AccountConfig
 from ..imap.client import MailClient, FolderNotFoundError
 from ..utils.folders import folder_error_message
+from ..utils.results_io import load_canonical_results
+from ..utils.cli import is_confirm_all
 
 
 def _filter_uids(results: list, mode: str) -> list[str]:
@@ -12,7 +13,7 @@ def _filter_uids(results: list, mode: str) -> list[str]:
     for r in results:
         category = r.get("category", "")
         if mode == "all" or category == "DESCARTABLE":
-            uid = r.get("header", {}).get("uid", "")
+            uid = str(r.get("uid", "") or "")
             if uid:
                 uids.append(uid)
     return uids
@@ -27,7 +28,7 @@ def _ask_and_execute(results: list, folder: str, account: AccountConfig):
         print("\nLimpieza cancelada.")
         return
 
-    if answer in {"t", "todos", "all"}:
+    if is_confirm_all(answer):
         mode = "all"
     else:
         mode = "descartable"
@@ -58,14 +59,11 @@ def _mark_as_read(uids: list[str], folder: str, mode: str, account: AccountConfi
 
 
 def run_clean(folder: str | None, yes: bool, all_: bool):
-    try:
-        with open("results.json", "r") as f:
-            data = json.load(f)
-    except FileNotFoundError:
-        print("No se encontraron resultados de escaneo. Ejecuta 'scan' primero.")
+    data = load_canonical_results()
+    if data is None:
         return
 
-    results = data if isinstance(data, list) else data.get("results", [])
+    results = data["results"]
 
     config_path = Path.home() / ".config" / "mail-assistant" / "config.yaml"
     manager = ConfigManager(config_path)

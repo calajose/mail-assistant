@@ -1,5 +1,7 @@
 import json
 from ..report.generator import ReportGenerator
+from ..utils.results_io import load_canonical_results
+
 
 def ask_only_important() -> bool:
     while True:
@@ -14,12 +16,10 @@ def ask_only_important() -> bool:
             return True
         print("Por favor responde con 't' (todos) o 'i' (solo importantes).")
 
+
 def run_report():
-    try:
-        with open("results.json", "r") as f:
-            data = json.load(f)
-    except FileNotFoundError:
-        print("No se encontraron resultados de escaneo. Ejecuta 'scan' primero.")
+    data = load_canonical_results()
+    if data is None:
         return
 
     results = data["results"]
@@ -41,8 +41,8 @@ def run_report():
         include_dudoso=include_dudoso,
         include_descartable=include_descartable
     )
-    
-    with open("report.md", "w") as f:
+
+    with open("report.md", "w", encoding="utf-8") as f:
         f.write(report)
-        
+
     print("\nReporte generado en report.md")

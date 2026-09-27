@@ -30,3 +30,6 @@ Thumbs.db
 # Archivos de pruebas temporales (en la raiz; los tests del proyecto viven en tests/)
 /test_*.py
 tmp/
+
+# Archivos temporales de escritura atomica
+*.tmp

@@ -6,6 +6,7 @@ dependencies = [
     "keyring",
     "imap-tools",
     "google-genai",
+    "httpx",
     "pydantic",
     "pyyaml",
 ]
@@ -23,7 +24,3 @@ mail-assistant = "mail_assistant.__main__:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-
-[tool.ruff]
-line-length = 88
-target-version = "py312"

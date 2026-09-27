@@ -49,8 +49,7 @@ El proyecto esta en fase de documentacion y proteccion, no de mejora. Ver
   con instrucciones de creacion. Ejecutar siempre desde la raiz del repo.
 - Test: `source venv/bin/activate && python -m pytest` (sin red, sin credenciales,
   <1s). `pyproject.toml` fija `testpaths = ["tests"]`.
-- No hay CI ni lint ejecutable: `ruff` esta configurado en `pyproject.toml`
-  pero no instalado en `venv/`.
+- No hay CI ni lint ejecutable: no se usa ningun linter en el proyecto.
 
 ## Rutas y artefactos
 
