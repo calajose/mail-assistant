@@ -14,21 +14,30 @@ mail_assistant/
   classifier/   # Servicio de clasificacion
   report/       # Generacion de reportes
   utils/        # Utilidades
-tests/          # pytest (23 tests, unitarios con monkeypatch)
+tests/          # pytest (131 tests, unitarios con monkeypatch)
 ```
 
-## Fase actual (obligatoria)
+## Fase actual: mantenimiento y mejora
 
-El proyecto esta en fase de documentacion y proteccion, no de mejora. Ver
-`.specify/memory/constitution.md`:
+El proyecto esta en fase de MANTENIMIENTO en produccion (mejora continua),
+gobernado por la Constitucion v3.0.0 (ratificada 2026-09-26, ultima enmienda
+2026-09-27), depositada en el repositorio privado de especificaciones.
+La constitucion prevalece sobre cualquier practica informal:
 
-- El comportamiento observable actual es sagrado; nada se cambia sin decision
-  por escrito del negocio, aunque parezca un bug.
-- Todo hallazgo se registra (registro de anomalias), no se corrige aqui.
-- Cero dependencias nuevas, cero refactors. No se anade ningun paquete ni se
-  reorganiza codigo.
-- Toda afirmacion requiere evidencia (fichero + lineas, dato real o testimonio
-  con nombre y fecha). Lo no verificable se marca SUPOSICION y se pregunta.
+- Nuevas funcionalidades, mejoras y correcciones permitidas sin decisión
+  previa de negocio; su alcance se fija en la definición de cada intervención.
+- Modificar el comportamiento observable existente en producción exige una
+  entrada en el registro de decisiones de cambio (decisión, autor, fecha,
+  justificación) y citar el ID de la decisión en el commit.
+- Characterization tests (prefijo `"CONGELA comportamiento actual:"`) y golden
+  master: son la red de regresión. Si pasan a rojo sin justificación, se
+  revierte el cambio; nunca se ajusta el test para forzar el aprobado.
+- Un solo módulo existente refactorizado a la vez (estrangulamiento), jamás
+  reescritura integral; los módulos nuevos llevan sus propias pruebas.
+- Dependencias externas: justificación motivada y aprobación previa; preferencia
+  por la librería estándar (stdlib).
+- Datos históricos persistidos (`results.json`, reportes): inmutables, cero
+  cambios retroactivos.
 - Todo el contenido nuevo en español de España.
 
 ## Comandos
@@ -48,7 +57,7 @@ El proyecto esta en fase de documentacion y proteccion, no de mejora. Ver
 - `./run` exige el entorno virtual `venv/` del propio repo; si no existe, falla
   con instrucciones de creacion. Ejecutar siempre desde la raiz del repo.
 - Test: `source venv/bin/activate && python -m pytest` (sin red, sin credenciales,
-  <1s). `pyproject.toml` fija `testpaths = ["tests"]`.
+  ~1s). `pyproject.toml` fija `testpaths = ["tests"]`.
 - No hay CI ni lint ejecutable: no se usa ningun linter en el proyecto.
 
 ## Rutas y artefactos
@@ -83,7 +92,3 @@ El proyecto esta en fase de documentacion y proteccion, no de mejora. Ver
 - Si la carpeta no existe, `scan` y `clean` terminan con codigo 1 y muestran las carpetas
   disponibles mas una sugerencia, en lugar de un traceback.
 - `mail_assistant/utils/folders.py` contiene la logica pura de resolucion y sugerencia.
-
-## Spec Kit
-
-Comandos `/speckit.*` en `.opencode/commands/`; plantillas y scripts en `.specify/`.
