@@ -33,3 +33,5 @@ tmp/
 
 # Archivos temporales de escritura atomica
 *.tmp
+.specify
+specs
