@@ -39,7 +39,6 @@ class MailAssistantConfig(BaseModel):
 CategoryLiteral = Literal["IMPORTANTE", "DESCARTABLE", "DUDOSO"]
 
 # Registro saneado de un correo procesado: solo datos de negocio.
-# Ver specs/012-fix-business-anomalies/data-model.md (A-16, A-08).
 class EmailResult(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
