@@ -1,0 +1,3 @@
+[submodule "specs-privado"]
+	path = specs-privado
+	url = https://github.com/privado/especificaciones.git
