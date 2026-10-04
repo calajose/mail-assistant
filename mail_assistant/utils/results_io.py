@@ -1,7 +1,9 @@
 import json
 
+from ..rules.base import Category
+
 CANONICAL_FIELDS = ("uid", "from_", "subject", "date", "category", "explanation")
-VALID_CATEGORIES = {"IMPORTANTE", "DUDOSO", "DESCARTABLE"}
+VALID_CATEGORIES = {categoria.value for categoria in Category}
 
 
 def _formato_error(motivo: str) -> str:

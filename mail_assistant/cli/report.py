@@ -3,18 +3,49 @@ from ..report.generator import ReportGenerator
 from ..utils.results_io import load_canonical_results
 
 
-def ask_only_important() -> bool:
+_PREGUNTA = (
+    "¿Qué deseas incluir en el reporte? [T]odos / [I]mportantes y Peligrosos / "
+    "Solo [P]eligrosos / Solo I[m]portantes (Enter = Todos): "
+)
+
+_SCOPE_TODOS = {"important": True, "peligroso": True, "dudoso": True, "descartable": True}
+
+
+def _resolve_scope(bruto: str) -> dict | None:
+    if bruto in ("", "t", "todos"):
+        return dict(_SCOPE_TODOS)
+    if bruto in ("i", "importante", "importantes"):
+        return {"important": True, "peligroso": True, "dudoso": False, "descartable": False}
+    if bruto in ("p", "peligroso", "peligrosos"):
+        return {"important": False, "peligroso": True, "dudoso": False, "descartable": False}
+    if bruto in ("m",):
+        return {"important": True, "peligroso": False, "dudoso": False, "descartable": False}
+    return None
+
+
+def ask_report_scope(respuesta: str | None = None) -> dict:
+    if respuesta is not None:
+        return _resolve_scope(respuesta.strip().lower()) or dict(_SCOPE_TODOS)
+
     while True:
         try:
-            ans = input("¿Qué deseas incluir en el reporte? [T]odos / solo [I]mportantes (Enter = Todos): ").strip().lower()
-        except EOFError:
-            return False
+            bruto = input(_PREGUNTA)
+        except (EOFError, OSError):
+            return dict(_SCOPE_TODOS)
 
-        if ans in ('', 't', 'todos'):
-            return False
-        if ans in ('i', 'importante', 'importantes'):
-            return True
-        print("Por favor responde con 't' (todos) o 'i' (solo importantes).")
+        scope = _resolve_scope(bruto.strip().lower())
+        if scope is not None:
+            return scope
+        print("Por favor responde con 't' (todos), 'i' (importantes y peligrosos), 'p' o 'm'.")
+
+
+def ask_only_important() -> bool:
+    return ask_report_scope() == {
+        "important": True,
+        "peligroso": False,
+        "dudoso": False,
+        "descartable": False,
+    }
 
 
 def run_report():
@@ -26,20 +57,17 @@ def run_report():
     provider = data.get("provider", "desconocido")
     model = data.get("model", "desconocido")
 
-    solo_importantes = ask_only_important()
-
-    include_important = True
-    include_dudoso = not solo_importantes
-    include_descartable = not solo_importantes
+    scope = ask_report_scope()
 
     generator = ReportGenerator()
     report = generator.generate(
         results,
         provider=provider,
         model=model,
-        include_important=include_important,
-        include_dudoso=include_dudoso,
-        include_descartable=include_descartable
+        include_important=scope["important"],
+        include_peligroso=scope["peligroso"],
+        include_dudoso=scope["dudoso"],
+        include_descartable=scope["descartable"],
     )
 
     with open("report.md", "w", encoding="utf-8") as f:

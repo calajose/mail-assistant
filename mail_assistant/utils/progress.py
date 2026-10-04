@@ -67,6 +67,7 @@ class ConsoleScanReporter(ScanReporter):
         self.llm_retries = 0
         self.category_counts = {
             Category.IMPORTANTE: 0,
+            Category.PELIGROSO: 0,
             Category.DUDOSO: 0,
             Category.DESCARTABLE: 0,
         }
@@ -151,6 +152,8 @@ class ConsoleScanReporter(ScanReporter):
         print(
             "  - IMPORTANTE: "
             f"{self.category_counts[Category.IMPORTANTE]} | "
+            "PELIGROSO: "
+            f"{self.category_counts[Category.PELIGROSO]} | "
             "DUDOSO: "
             f"{self.category_counts[Category.DUDOSO]} | "
             "DESCARTABLE: "

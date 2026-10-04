@@ -7,6 +7,29 @@ from ..utils.folders import folder_error_message
 from ..utils.results_io import load_canonical_results
 from ..utils.cli import is_confirm_all
 
+CATEGORIA_PELIGROSO = "PELIGROSO"
+
+
+def _peligrosos_de(results: list) -> list[dict]:
+    return [r for r in results if r.get("category", "") == CATEGORIA_PELIGROSO]
+
+
+def _advertir_peligrosos(conteo: int) -> None:
+    print(
+        f"⚠️  Atención: Hay {conteo} correo(s) clasificado(s) como PELIGROSO en el lote.",
+        flush=True,
+    )
+
+
+def _confirmar_peligrosos() -> bool:
+    try:
+        respuesta = input(
+            "¿Estás seguro de marcar también como leídos los correos PELIGROSO? [s/N]: "
+        ).strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        return False
+    return respuesta in ("s", "si", "sí", "y", "yes")
+
 
 def _filter_uids(results: list, mode: str) -> list[str]:
     uids = []
@@ -32,6 +55,17 @@ def _ask_and_execute(results: list, folder: str, account: AccountConfig):
         mode = "all"
     else:
         mode = "descartable"
+
+    if mode == "all":
+        peligrosos = _peligrosos_de(results)
+        if peligrosos:
+            _advertir_peligrosos(len(peligrosos))
+            if not _confirmar_peligrosos():
+                print(
+                    "Limpieza cancelada: los correos PELIGROSO no se han marcado como leidos.",
+                    flush=True,
+                )
+                return
 
     uids = _filter_uids(results, mode)
     if not uids:
@@ -64,6 +98,7 @@ def run_clean(folder: str | None, yes: bool, all_: bool):
         return
 
     results = data["results"]
+    peligrosos = _peligrosos_de(results)
 
     config_path = Path.home() / ".config" / "mail-assistant" / "config.yaml"
     manager = ConfigManager(config_path)
@@ -73,6 +108,8 @@ def run_clean(folder: str | None, yes: bool, all_: bool):
     account = manager.config.account
 
     if yes and all_:
+        if peligrosos:
+            _advertir_peligrosos(len(peligrosos))
         uids = _filter_uids(results, "all")
         if not uids:
             print("No hay correos para marcar como leidos.")
@@ -85,6 +122,14 @@ def run_clean(folder: str | None, yes: bool, all_: bool):
             return
         _mark_as_read(uids, selected_folder, "descartable", account)
     elif all_:
+        if peligrosos:
+            _advertir_peligrosos(len(peligrosos))
+            if not _confirmar_peligrosos():
+                print(
+                    "Limpieza cancelada: los correos PELIGROSO no se han marcado como leidos.",
+                    flush=True,
+                )
+                return
         uids = _filter_uids(results, "all")
         if not uids:
             print("No hay correos para marcar como leidos.")

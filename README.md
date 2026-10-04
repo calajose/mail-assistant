@@ -5,6 +5,9 @@ Asistente de correo local y modular que clasifica correos electrónicos usando r
 ## Características
 
 - Clasificación basada en reglas locales (minimiza las llamadas al LLM)
+- Cuatro categorías de clasificación: `IMPORTANTE`, `PELIGROSO`, `DUDOSO` y `DESCARTABLE`
+- Detección de correos `PELIGROSO` (phishing, suplantación, spoofing, ingeniería social, malware y enlaces fraudulentos) mediante LLM, con explicación obligatoria de los indicios observados
+- Protección de los correos `PELIGROSO` frente a limpiezas accidentales
 - Gestión segura de credenciales mediante el llavero del sistema (keyring)
 - Arquitectura extensible de proveedores LLM
 - Generación de reportes detallados en Markdown
@@ -156,6 +159,8 @@ Los prompts de cada proveedor ya no están embebidos en el código. La aplicaci�
 
 - Además, si defines `llm.user_context` en `config.yaml`, ese contexto se añade al final del prompt cargado.
 
+- El prompt oficial define las cuatro categorías (`IMPORTANTE`, `PELIGROSO`, `DESCARTABLE` y `DUDOSO`, en ese orden de gravedad) e incluye la directiva de que toda clasificación como `PELIGROSO` debe detallar en la explicación los indicios concretos observados (por ejemplo, remitente suplantando a un banco con dominio typosquatting, enlace acortado sospechoso de recolección de credenciales o solicitud urgente de credenciales bancarias).
+
 ### Reglas de clasificación
 
 El motor local evalúa estas reglas en orden y suma puntuación:
@@ -173,6 +178,8 @@ Si ninguna regla llega a `+100` o `-100`, se aplican los umbrales:
 - `score >= important` → `IMPORTANTE`
 - `score <= discard` → `DESCARTABLE`
 - en medio → `DUDOSO` (y se consulta LLM si está habilitado)
+
+Los correos consultados al LLM pueden devolver cualquiera de las cuatro categorías: además de `IMPORTANTE`, `DUDOSO` y `DESCARTABLE`, el LLM puede clasificar un correo como `PELIGROSO` cuando detecta indicios de phishing, suplantación o ingeniería social. Las reglas locales actuales no asignan `PELIGROSO` por sí solas.
 
 Excepciones de prioridad:
 
@@ -257,7 +264,7 @@ El tiempo de respuesta del LLM se muestra en segundos con dos decimales, permiti
 
 La descarga de cabeceras se hace en lotes y muestra progreso incremental (`Descargando cabeceras... n/total`) para evitar periodos largos sin feedback cuando hay muchos correos.
 
-Al finalizar, el comando imprime un resumen con duración total, número de correos clasificados por reglas locales, correos enviados al LLM, fallos del LLM, reintentos y desglose por categoría (`IMPORTANTE`, `DUDOSO`, `DESCARTABLE`).
+Al finalizar, el comando imprime un resumen con duración total, número de correos clasificados por reglas locales, correos enviados al LLM, fallos del LLM, reintentos y desglose por categoría (`IMPORTANTE`, `PELIGROSO`, `DUDOSO`, `DESCARTABLE`).
 
 El resultado se guarda en `results.json`.
 
@@ -308,15 +315,17 @@ mail-assistant clean [--folder CARPETA] [--yes] [--all]
 | Flag | Descripción |
 |------|-------------|
 | `--folder CARPETA` | Carpeta IMAP a limpiar para esta ejecución. Si no se indica, usa la carpeta guardada en la configuración. Igual que en `scan`, el nombre se resuelve sin distinguir mayúsculas |
-| `--yes` | Marca solo DESCARTABLES sin preguntar nada |
-| `--yes --all` | Marca todos los correos sin preguntar nada |
+| `--yes` | Marca solo DESCARTABLES sin preguntar nada. Nunca toca correos `PELIGROSO` |
+| `--yes --all` | Marca todos los correos sin preguntar nada. Si el lote contiene correos `PELIGROSO`, imprime antes un aviso con su recuento |
 
 Comportamiento según flags:
 
 - **Sin flags**: pregunta una sola vez `¿Marcar como leidos (t)odos o solo (d)escartables? [D]:`. Al responder, ejecuta directamente.
-- `--all`: marca todos los correos sin preguntar modo.
+- `--all`: marca todos los correos sin preguntar modo. Si el lote contiene correos `PELIGROSO`, muestra un aviso con su recuento y pide una confirmación adicional (`¿Estás seguro de marcar también como leídos los correos PELIGROSO? [s/N]:`); sin confirmación explícita, la limpieza se cancela sin marcar nada.
 - `--yes`: marca solo DESCARTABLES, sin preguntar nada (modo no interactivo).
-- `--yes --all` = `--yes --all`: marca todos, sin preguntar nada.
+- `--yes --all` = `--yes --all`: marca todos, sin preguntar nada, mostrando el aviso de correos `PELIGROSO` si los hay.
+
+Los correos clasificados como `PELIGROSO` jamás se marcan como leídos en los modos por defecto: requieren la confirmación explícita de `--all` (con aviso) o `--yes --all` (con aviso en consola).
 
 Nota de comportamiento (caso borde): si ejecutaste `scan` con `--folder` para usar una carpeta distinta de la configurada, ejecuta `clean` con ese mismo `--folder` para marcar los correos correctos.
 
@@ -337,10 +346,14 @@ mail-assistant scan --folder Bulk
 
 El comando `mail-assistant report` lee el archivo `results.json` generado por `mail-assistant scan` y compila un reporte detallado en `report.md`. No tiene flags de línea de comandos; usa una sola pregunta interactiva para elegir entre:
 
-- `Todos` (default al pulsar Enter): incluye `IMPORTANTE`, `DUDOSO` y `DESCARTABLE`
-- `Solo IMPORTANTES`: incluye únicamente `IMPORTANTE`
+- `Todos` (default al pulsar Enter): incluye `IMPORTANTE`, `PELIGROSO`, `DUDOSO` y `DESCARTABLE`
+- `Importantes y Peligrosos` (`i`): incluye `IMPORTANTE` y `PELIGROSO`
+- `Solo Peligrosos` (`p`): incluye únicamente `PELIGROSO`
+- `Solo Importantes` (`m`): incluye únicamente `IMPORTANTE`
 
-Si un correo quedó marcado como `DUDOSO`, el reporte identificará automáticamente si el origen de la duda proviene de las reglas locales, de un fallo de disponibilidad del LLM o si fue validado y confirmado por el LLM. En el modo `Solo IMPORTANTES`, las secciones `DUDOSO` y `DESCARTABLE` no se incluyen.
+El resumen superior del reporte muestra el contador de cada categoría (incluido `Peligrosos`). La sección `## Correos PELIGROSO` se sitúa siempre antes de `## Correos DUDOSO` y presenta una tabla con las columnas `De`, `Asunto`, `Fecha`, `Tipo de amenaza` y `Explicación`; el tipo de amenaza (`Phishing / Suplantación`, `Ingeniería social`, `Malware / Adjunto sospechoso`, `Enlace fraudulento` o `Amenaza sospechosa`) se deduce de los indicios descritos en la explicación.
+
+Si un correo quedó marcado como `DUDOSO`, el reporte identificará automáticamente si el origen de la duda proviene de las reglas locales, de un fallo de disponibilidad del LLM o si fue validado y confirmado por el LLM. En los modos `Solo IMPORTANTES` y `Solo Peligrosos`, las secciones ajenas a la selección no se incluyen.
 
 ```bash
 mail-assistant report

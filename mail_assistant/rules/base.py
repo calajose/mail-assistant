@@ -4,6 +4,7 @@ from ..imap.models import EmailHeader
 
 class Category(Enum):
     IMPORTANTE = "IMPORTANTE"
+    PELIGROSO = "PELIGROSO"
     DUDOSO = "DUDOSO"
     DESCARTABLE = "DESCARTABLE"
 
