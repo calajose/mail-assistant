@@ -36,7 +36,7 @@ class MailAssistantConfig(BaseModel):
     classifier_rules: ClassifierRules
 
 
-CategoryLiteral = Literal["IMPORTANTE", "DESCARTABLE", "DUDOSO"]
+CategoryLiteral = Literal["IMPORTANTE", "PELIGROSO", "DESCARTABLE", "DUDOSO"]
 
 # Registro saneado de un correo procesado: solo datos de negocio.
 class EmailResult(BaseModel):
