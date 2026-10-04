@@ -21,7 +21,15 @@ tests/          # pytest (131 tests, unitarios con monkeypatch)
 
 El proyecto esta en fase de MANTENIMIENTO en produccion (mejora continua),
 gobernado por la Constitucion v3.0.0 (ratificada 2026-09-26, ultima enmienda
-2026-09-27), depositada en el repositorio privado de especificaciones.
+2026-09-27), depositada en el repo privado de especificaciones del proyecto
+(ruta interna `.specify/memory/constitution.md`).
+
+Dicho repo privado se clona aparte en `specs-privado/`, con symlinks `specs/` y
+`.specify/` a el. Las tres rutas estan en `.gitignore`: las especificaciones son
+privadas, jamas se commitean en este repo publico ni se nombra aqui su remoto
+(la URL esta en la config local de `specs-privado`). Para trabajar con ellas,
+`cd specs-privado` y commitear/pushear ahi; para sincronizar, `git pull` ahi.
+
 La constitucion prevalece sobre cualquier practica informal:
 
 - Nuevas funcionalidades, mejoras y correcciones permitidas sin decisión
