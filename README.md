@@ -358,3 +358,11 @@ mail-assistant report
 - **Nuevos Proveedores LLM**: Implementa una nueva clase en `llm/` que herede de `LLMProvider` y regístrala en la factoría de `cli/scan.py`.
 - **Nuevas Reglas**: Añade clases en `rules/implementations.py` heredando de `Rule`. Regístralas en `RuleEngine` para que sean consideradas.
 - **Modificaciones de Estructura**: Mantén la separación de responsabilidades: si es lógica de negocio, va en `classifier/` o `rules/`; si es acceso a datos, va en `imap/`.
+
+## Licencia
+
+El código de este repositorio está bajo licencia MIT (ver `LICENSE`).
+
+Las especificaciones de diseño se mantienen en un repositorio privado, no se
+distribuyen con este proyecto y quedan fuera del alcance de la licencia MIT.
+Todos los derechos reservados sobre dicho contenido.
