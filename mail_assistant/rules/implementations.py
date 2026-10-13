@@ -22,7 +22,7 @@ def _entry_matches(entry: str, address: str, domain: str) -> bool:
     """Compara una entrada de lista contra un remitente (A-04, decision P28).
 
     - Entrada con "@": coincidencia exacta de direccion completa.
-    - Entrada sin "@": dominio estricto tras la ultima arroba.
+    - Entrada sin "@": dominio estricto o subdominio legitimo tras la ultima arroba.
     Ambas en minusculas (A-02, decision P1).
     """
     normalized = (entry or "").strip().lower()
@@ -30,14 +30,18 @@ def _entry_matches(entry: str, address: str, domain: str) -> bool:
         return False
     if "@" in normalized:
         return bool(address) and normalized == address
-    return bool(domain) and normalized == domain
+    if not domain:
+        return False
+    return domain == normalized or domain.endswith("." + normalized)
 
 
 class WhitelistRule(Rule):
     def __init__(self, domains: list[str]):
         self.domains = domains
 
-    def evaluate(self, email: EmailHeader) -> int:
+    def evaluate(self, email: EmailHeader, signals=None) -> int:
+        if signals and getattr(signals, "auth_failed", False):
+            return 0
         address, domain = _extract_sender_parts(email.from_)
         for entry in self.domains:
             if _entry_matches(entry, address, domain):
@@ -49,7 +53,7 @@ class BlacklistRule(Rule):
     def __init__(self, domains: list[str]):
         self.domains = domains
 
-    def evaluate(self, email: EmailHeader) -> int:
+    def evaluate(self, email: EmailHeader, signals=None) -> int:
         address, domain = _extract_sender_parts(email.from_)
         for entry in self.domains:
             if _entry_matches(entry, address, domain):

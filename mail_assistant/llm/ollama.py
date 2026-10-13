@@ -242,12 +242,17 @@ class OllamaProvider(LLMProvider):
 
     def classify_email(self, email: EmailHeader, signals: dict, body_preview: str | None = None) -> LLMClassificationResult:
         body = (body_preview or "")[: self.body_preview_limit]
+        sec_prompt = signals.get("security_prompt", "") if isinstance(signals, dict) else ""
         prompt = (
             f"{self.prompt_intro}\n"
             f"Asunto: {email.subject}\n"
             f"Remitente: {email.from_}\n"
-            f"Senales: {signals}\n"
         )
+        if sec_prompt:
+            prompt += f"Senales de seguridad:\n{sec_prompt}\n"
+        elif signals:
+            prompt += f"Senales: {signals}\n"
+
         if body:
             prompt += f"Cuerpo: {body}\n"
         if self.user_context:

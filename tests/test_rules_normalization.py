@@ -73,9 +73,10 @@ def test_whitelist_rejects_other_domain_containing_entry_as_substring():
     assert rule.evaluate(make_header("user@evil-cantookstation.com.evil.ru")) == 0
 
 
-def test_whitelist_does_not_match_subdomain_of_listed_domain():
+def test_whitelist_matches_subdomain_of_listed_domain():
+    # CONGELA comportamiento Spec 014 (RF-006): subdominios legitimos coinciden con el dominio base
     rule = WhitelistRule(["cantookstation.com"])
-    assert rule.evaluate(make_header("avisos@sub.cantookstation.com")) == 0
+    assert rule.evaluate(make_header("avisos@sub.cantookstation.com")) == 100
 
 
 def test_whitelist_entry_with_arroba_matches_only_exact_address():
