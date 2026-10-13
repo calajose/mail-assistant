@@ -6,7 +6,8 @@ Asistente de correo local y modular que clasifica correos electrónicos usando r
 
 - Clasificación basada en reglas locales (minimiza las llamadas al LLM)
 - Cuatro categorías de clasificación: `IMPORTANTE`, `PELIGROSO`, `DUDOSO` y `DESCARTABLE`
-- Detección de correos `PELIGROSO` (phishing, suplantación, spoofing, ingeniería social, malware y enlaces fraudulentos) mediante LLM, con explicación obligatoria de los indicios observados
+- Detección de correos `PELIGROSO` (phishing, suplantación, spoofing, ingeniería social, malware y enlaces fraudulentos) mediante análisis técnico de cabeceras de autenticación (SPF/DKIM/DMARC) y LLM, respaldado por un guardarraíl de segundo nivel que exige evidencias objetivas comprobables
+- Verificación técnica de remitentes en reglas locales: coincidencia exacta o por subdominio legítimo e inhibición de listas de confianza si la autenticación del remitente ha fallado
 - Protección de los correos `PELIGROSO` frente a limpiezas accidentales
 - Gestión segura de credenciales mediante el llavero del sistema (keyring)
 - Arquitectura extensible de proveedores LLM
@@ -167,9 +168,9 @@ El motor local evalúa estas reglas en orden y suma puntuación:
 
 | Regla | Qué evalúa | Puntuación | Efecto |
 |------|------------|-----------:|--------|
-| `whitelist_domains` | Si algún valor de la lista está contenido en `from_` | `+100` | Se clasifica como `IMPORTANTE` inmediatamente (sin LLM) |
-| `blacklist_domains` | Si algún valor de la lista está contenido en `from_` | `-100` | Se clasifica como `DESCARTABLE` inmediatamente |
-| `force_llm_senders` | Si algún valor de la lista está contenido en `from_` | `0` | Fuerza paso por LLM cuando el resultado local sería `DESCARTABLE` por umbral |
+| `whitelist_domains` | Dirección o dominio/subdominio legítimo en `from_` (requiere autenticación SPF/DKIM correcta) | `+100` | Se clasifica como `IMPORTANTE` inmediatamente (sin LLM) |
+| `blacklist_domains` | Dirección o dominio/subdominio legítimo en `from_` | `-100` | Se clasifica como `DESCARTABLE` inmediatamente |
+| `force_llm_senders` | Dirección o dominio/subdominio legítimo en `from_` | `0` | Fuerza paso por LLM cuando el resultado local sería `DESCARTABLE` por umbral |
 | Newsletter | Cabeceras como `list-unsubscribe` o `auto-submitted` | `-40` | Resta prioridad |
 | `positive_keywords` / `negative_keywords` | Coincidencias en asunto + remitente | `+15` / `-15` por palabra | Ajuste incremental |
 
@@ -179,10 +180,11 @@ Si ninguna regla llega a `+100` o `-100`, se aplican los umbrales:
 - `score <= discard` → `DESCARTABLE`
 - en medio → `DUDOSO` (y se consulta LLM si está habilitado)
 
-Los correos consultados al LLM pueden devolver cualquiera de las cuatro categorías: además de `IMPORTANTE`, `DUDOSO` y `DESCARTABLE`, el LLM puede clasificar un correo como `PELIGROSO` cuando detecta indicios de phishing, suplantación o ingeniería social. Las reglas locales actuales no asignan `PELIGROSO` por sí solas.
+Los correos consultados al LLM se analizan junto con sus hechos técnicos de seguridad (SPF, DKIM, DMARC, enlaces y adjuntos). El LLM puede clasificar un correo como `PELIGROSO` únicamente si existen evidencias técnicas de amenaza; en su ausencia, el guardarraíl de segundo nivel del clasificador degrada la propuesta a `IMPORTANTE` o `DESCARTABLE` evitando falsos positivos.
 
 Excepciones de prioridad:
 
+- `whitelist_domains` requiere que la autenticación del correo no haya fallado; si falla (por ejemplo, una suplantación), la regla de confianza se inhibe y el correo pasa a inspección general.
 - `blacklist_domains` y `whitelist_domains` ganan por cortocircuito (`-100` / `+100`) y no se envían al LLM.
 - `force_llm_senders` aplica para evitar descartes por umbral y pasar esos correos al LLM.
 
