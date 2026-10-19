@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from ..config.manager import ConfigManager
 from ..config.models import EmailResult
-from ..imap.client import MailClient, FolderNotFoundError
+from ..imap.client import MailClient, FolderNotFoundError, MailConnectionError
 from ..rules.engine import RuleEngine
 from ..llm.gemini import GeminiProvider
 from ..llm.ollama import OllamaProvider
@@ -66,6 +66,9 @@ def run_scan(limit: int, no_llm: bool, folder: str | None, process_all: bool = F
         total_unread = mail_client.count_unread()
     except FolderNotFoundError as exc:
         print(folder_error_message(exc.folder, exc.available))
+        sys.exit(1)
+    except MailConnectionError as exc:
+        print(str(exc))
         sys.exit(1)
     print(f"Correos no leidos en '{selected_folder}': {total_unread}")
     if not no_llm:
@@ -137,9 +140,13 @@ def run_scan(limit: int, no_llm: bool, folder: str | None, process_all: bool = F
         output["updated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
         _write_results(output)
 
-    results = service.process_unread(
-        effective_limit, not no_llm, force_llm=force_llm, on_result=_persist
-    )
+    try:
+        results = service.process_unread(
+            effective_limit, not no_llm, force_llm=force_llm, on_result=_persist
+        )
+    except MailConnectionError as exc:
+        print(str(exc))
+        sys.exit(1)
 
     output["results"] = serialized_results
     output["updated_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")

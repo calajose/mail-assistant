@@ -1,6 +1,7 @@
+import sys
 from pathlib import Path
 from ..config.manager import ConfigManager
-from ..imap.client import MailClient
+from ..imap.client import MailClient, MailConnectionError
 
 
 def run_folders():
@@ -18,6 +19,9 @@ def run_folders():
 
     try:
         folders = mail_client.list_folders()
+    except MailConnectionError as exc:
+        print(str(exc))
+        sys.exit(1)
     except Exception as exc:
         print(f"Error al conectar con el servidor IMAP: {exc}")
         return

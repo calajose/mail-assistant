@@ -22,6 +22,14 @@ class FakeFolder:
         self.set_calls.append((name, readonly))
 
 
+class FakeIMAPClient:
+    def __init__(self):
+        self.shutdown_calls = 0
+
+    def shutdown(self):
+        self.shutdown_calls += 1
+
+
 class FakeMailBox:
     created: list["FakeMailBox"] = []
 
@@ -30,8 +38,10 @@ class FakeMailBox:
         self.port = port
         self.timeout = timeout
         self.folder = FakeFolder()
+        self.client = FakeIMAPClient()
         self.broken = False
         self.logged_out = False
+        self.initial_folder = "INBOX"
         self.fetch_calls = 0
         FakeMailBox.created.append(self)
 
@@ -40,6 +50,7 @@ class FakeMailBox:
         cls.created = []
 
     def login(self, username, password, initial_folder="INBOX"):
+        self.initial_folder = initial_folder
         return self
 
     def __enter__(self):

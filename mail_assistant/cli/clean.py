@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 from ..config.manager import ConfigManager
 from ..config.models import AccountConfig
-from ..imap.client import MailClient, FolderNotFoundError
+from ..imap.client import MailClient, FolderNotFoundError, MailConnectionError
 from ..utils.folders import folder_error_message
 from ..utils.results_io import load_canonical_results
 from ..utils.cli import is_confirm_all
@@ -87,6 +87,9 @@ def _mark_as_read(uids: list[str], folder: str, mode: str, account: AccountConfi
         marked = mail_client.mark_as_read(uids)
     except FolderNotFoundError as exc:
         print(folder_error_message(exc.folder, exc.available))
+        sys.exit(1)
+    except MailConnectionError as exc:
+        print(str(exc))
         sys.exit(1)
     label = "DESCARTABLES" if mode == "descartable" else "correos"
     print(f"Limpieza completada. {marked} {label} marcados como leidos en '{folder}'.")

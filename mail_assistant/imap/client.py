@@ -1,11 +1,19 @@
-from imap_tools import MailBox, A, MailMessageFlags
-from imap_tools.errors import MailboxFolderSelectError
-from contextlib import contextmanager
+import imaplib
+import ssl
+import time
 from collections.abc import Callable
+from contextlib import contextmanager
+
+from imap_tools import A, MailBox, MailMessageFlags
+from imap_tools.errors import MailboxFolderSelectError, MailboxLoginError
+
 from ..config.models import AccountConfig
 from ..utils.folders import resolve_folder
 
 FETCH_CHUNK_SIZE = 25
+RETRY_ATTEMPTS = 3
+RETRY_DELAYS = (1, 2)
+TRANSIENT_ERRORS = (TimeoutError, ConnectionError, OSError, ssl.SSLError, imaplib.IMAP4.abort)
 
 
 class FolderNotFoundError(Exception):
@@ -13,6 +21,31 @@ class FolderNotFoundError(Exception):
         self.folder = folder
         self.available = available
         super().__init__(f"Folder '{folder}' does not exist on the server")
+
+
+class MailConnectionError(Exception):
+    """Fallo de conexion con el servidor IMAP con mensaje y accion sugerida."""
+
+    NETWORK = "network"
+    CREDENTIALS = "credentials"
+
+    def __init__(self, reason: str, detail: str = "", suggestion: str = "", subject: str = ""):
+        self.reason = reason
+        self.detail = detail
+        self.suggestion = suggestion
+        self.subject = subject
+        lines = [self._headline()]
+        if detail:
+            lines.extend(["", f"Detalle: {detail}"])
+        if suggestion:
+            lines.extend(["", f"Acción sugerida: {suggestion}"])
+        super().__init__("\n".join(lines))
+
+    def _headline(self) -> str:
+        if self.reason == self.CREDENTIALS:
+            account = f" de la cuenta {self.subject}" if self.subject else ""
+            return f"Error: el servidor IMAP ha rechazado las credenciales{account}."
+        return "Error: no se ha podido conectar con el servidor IMAP."
 
 
 class MailClient:
@@ -23,19 +56,86 @@ class MailClient:
         self._mailbox_session = None
         self._retired_sessions: list = []
 
+    def _new_mailbox(self):
+        return MailBox(self.config.host, port=self.config.port, timeout=self.config.timeout)
+
     @staticmethod
-    def _safe_close(mailbox) -> None:
+    def _detail(exc: Exception) -> str:
+        text = str(exc).strip()
+        return text or exc.__class__.__name__
+
+    def _close(self, mailbox) -> None:
+        """Cierra la sesion sin lanzar nunca y sin enmascarar el error original."""
+        if mailbox is None:
+            return
         try:
-            mailbox.__exit__(None, None, None)
+            mailbox.logout()
         except Exception:
-            pass
+            client = getattr(mailbox, "client", None)
+            if client is not None:
+                try:
+                    client.shutdown()
+                except Exception:
+                    pass
+
+    def _credentials_error(self, exc: Exception) -> MailConnectionError:
+        return MailConnectionError(
+            MailConnectionError.CREDENTIALS,
+            detail=self._detail(exc),
+            suggestion=(
+                "revisa la contraseña y vuelve a ejecutar "
+                "'mail-assistant configure' para actualizarla."
+            ),
+            subject=self.config.name,
+        )
+
+    def _network_error(self, exc: Exception) -> MailConnectionError:
+        return MailConnectionError(
+            MailConnectionError.NETWORK,
+            detail=self._detail(exc),
+            suggestion=(
+                f"comprueba tu conexión a internet y que el servidor {self.config.host} "
+                "esté disponible; vuelve a intentarlo más tarde."
+            ),
+        )
+
+    def _open_mailbox(self, readonly: bool, select_folder: bool = True):
+        last_error: Exception | None = None
+        for attempt in range(RETRY_ATTEMPTS):
+            if attempt:
+                time.sleep(RETRY_DELAYS[attempt - 1])
+            mailbox = None
+            try:
+                mailbox = self._new_mailbox()
+                mailbox.login(self.config.name, self.password, initial_folder=None)
+                if select_folder:
+                    self._select_folder(mailbox, readonly=readonly)
+                return mailbox
+            except MailboxLoginError as exc:
+                self._close(mailbox)
+                raise self._credentials_error(exc) from exc
+            except FolderNotFoundError:
+                self._close(mailbox)
+                raise
+            except TRANSIENT_ERRORS as exc:
+                self._close(mailbox)
+                last_error = exc
+            except Exception:
+                self._close(mailbox)
+                raise
+        raise self._network_error(last_error) from last_error
+
+    @contextmanager
+    def _connect(self, readonly: bool = False, select_folder: bool = True):
+        mailbox = self._open_mailbox(readonly, select_folder=select_folder)
+        try:
+            yield mailbox
+        finally:
+            self._close(mailbox)
 
     @contextmanager
     def session(self):
-        with MailBox(self.config.host, port=self.config.port, timeout=self.config.timeout).login(
-            self.config.name, self.password
-        ) as original:
-            self._select_folder(original, readonly=True)
+        with self._connect(readonly=True) as original:
             self._mailbox_session = original
             retired = []
             self._retired_sessions = retired
@@ -47,9 +147,9 @@ class MailClient:
                 self._retired_sessions = []
                 for stale in retired:
                     if stale is not original:
-                        self._safe_close(stale)
+                        self._close(stale)
                 if current is not None and current is not original:
-                    self._safe_close(current)
+                    self._close(current)
 
     @contextmanager
     def _open_readonly_mailbox(self):
@@ -57,16 +157,11 @@ class MailClient:
             yield self._mailbox_session
             return
 
-        with MailBox(self.config.host, port=self.config.port, timeout=self.config.timeout).login(
-            self.config.name, self.password
-        ) as mailbox:
-            self._select_folder(mailbox, readonly=True)
+        with self._connect(readonly=True) as mailbox:
             yield mailbox
 
     def list_folders(self) -> list[str]:
-        with MailBox(self.config.host, port=self.config.port, timeout=self.config.timeout).login(
-            self.config.name, self.password
-        ) as mailbox:
+        with self._connect(readonly=True, select_folder=False) as mailbox:
             return [folder.name for folder in mailbox.folder.list()]
 
     def _select_folder(self, mailbox, readonly: bool) -> None:
@@ -126,23 +221,14 @@ class MailClient:
         return ""
 
     def _get_email_body_preview_with_fresh_connection(self, uid: str, limit: int) -> str:
-        replacement = MailBox(
-            self.config.host, port=self.config.port, timeout=self.config.timeout
-        )
+        replacement = self._open_mailbox(readonly=True)
         try:
-            replacement.login(self.config.name, self.password)
-        except Exception:
-            self._safe_close(replacement)
-            raise
-
-        try:
-            self._select_folder(replacement, readonly=True)
             preview = ""
             for msg in replacement.fetch(A(uid=uid)):
                 preview = msg.text[:limit]
                 break
         except Exception:
-            self._safe_close(replacement)
+            self._close(replacement)
             raise
 
         self._adopt_session(replacement)
@@ -160,10 +246,7 @@ class MailClient:
         if not cleaned_uids:
             return 0
 
-        with MailBox(self.config.host, port=self.config.port, timeout=self.config.timeout).login(
-            self.config.name, self.password
-        ) as mailbox:
-            self._select_folder(mailbox, readonly=False)
+        with self._connect(readonly=False) as mailbox:
             mailbox.flag(cleaned_uids, MailMessageFlags.SEEN, True)
 
         return len(cleaned_uids)
