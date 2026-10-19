@@ -1,3 +1,5 @@
+import pytest
+
 from mail_assistant.utils.folders import (
     folder_error_message,
     resolve_folder,
@@ -70,3 +72,45 @@ def test_error_message_without_available_folders():
     message = folder_error_message("Spam", [])
     assert "Carpetas disponibles" not in message
     assert "mail-assistant folders" in message
+
+
+class _FakeFolderManager:
+    def __init__(self, path=None):
+        from mail_assistant.config.models import AccountConfig
+
+        self.config = type(
+            "Cfg",
+            (),
+            {"account": AccountConfig(name="u@e.com", host="imap.ejemplo.com", folder="INBOX")},
+        )()
+
+    def get_imap_password(self, name):
+        return "secreto"
+
+
+def test_folders_reutiliza_el_mensaje_y_sale_con_1(monkeypatch, capsys):
+    from mail_assistant.cli import folders as folders_cli
+    from mail_assistant.imap.client import MailConnectionError
+
+    class FalloCliente:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def list_folders(self):
+            raise MailConnectionError(
+                MailConnectionError.NETWORK,
+                detail="tiempo de espera agotado",
+                suggestion="comprueba tu conexión y reintenta",
+            )
+
+    monkeypatch.setattr(folders_cli, "ConfigManager", _FakeFolderManager)
+    monkeypatch.setattr(folders_cli, "MailClient", FalloCliente)
+
+    with pytest.raises(SystemExit) as excinfo:
+        folders_cli.run_folders()
+
+    salida = capsys.readouterr().out
+    assert excinfo.value.code == 1
+    assert "no se ha podido conectar con el servidor IMAP" in salida
+    assert "Acción sugerida" in salida
+    assert "Error al conectar con el servidor IMAP" not in salida
